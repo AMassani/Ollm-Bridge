@@ -29,7 +29,8 @@ Write-Info "Testing connection to Ollama server at: $OllamaServerURL"
 try {
     $response = Invoke-RestMethod -Uri "$OllamaServerURL/api/tags" -Method Get -TimeoutSec 5
     Write-Success "✓ Connected to Ollama server successfully"
-} catch {
+}
+catch {
     Write-Error-Custom "✗ Cannot connect to Ollama server at $OllamaServerURL"
     Write-Host "Ensure the Ollama server is running and accessible."
     Write-Host "Usage: .\Ollm_Bridge_Remote_v1.0.ps1 -OllamaServerURL http://your-server:11434"
@@ -41,7 +42,8 @@ if (-not (Test-Path $PublicModelsDir)) {
     Write-Info "Creating Public Models Directory..."
     New-Item -Type Directory -Path $PublicModelsDir | Out-Null
     Write-Success "✓ Public Models Directory created"
-} else {
+}
+else {
     Write-Success "✓ Public Models Directory confirmed"
 }
 
