@@ -1,22 +1,9 @@
-# Ollm Bridge Remote v1.0
-# Bridges LM Studio with Ollama models hosted on a remote Linux server
-# Uses Ollama API to pull model information without requiring local file access
-
 param(
     [string]$OllamaServerURL = "http://localhost:11434",
-    [string]$PublicModelsDir = "$env:USERPROFILE\publicmodels",
-    [int]$DownloadParallel = 2
+    [string]$PublicModelsDir = "$env:USERPROFILE\publicmodels"
 )
 
-# Configuration
 $ErrorActionPreference = "Stop"
-$ProgressPreference = "SilentlyContinue"
-
-# Color output for better readability
-function Write-Success { Write-Host $args -ForegroundColor Green }
-function Write-Error-Custom { Write-Host $args -ForegroundColor Red }
-function Write-Warning-Custom { Write-Host $args -ForegroundColor Yellow }
-function Write-Info { Write-Host $args -ForegroundColor Cyan }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -24,84 +11,85 @@ Write-Host "Ollm Bridge Remote v1.0" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Validate Ollama server connection
-Write-Info "Testing connection to Ollama server at: $OllamaServerURL"
+Write-Host "Testing connection to Ollama server at: $OllamaServerURL" -ForegroundColor Cyan
+
 try {
     $response = Invoke-RestMethod -Uri "$OllamaServerURL/api/tags" -Method Get -TimeoutSec 5
-    Write-Success "✓ Connected to Ollama server successfully"
+    Write-Host "Connected to Ollama server successfully" -ForegroundColor Green
 }
 catch {
-    Write-Error-Custom "✗ Cannot connect to Ollama server at $OllamaServerURL"
-    Write-Host "Ensure the Ollama server is running and accessible."
-    Write-Host "Usage: .\Ollm_Bridge_Remote_v1.0.ps1 -OllamaServerURL http://your-server:11434"
+    Write-Host "ERROR: Cannot connect to Ollama server at $OllamaServerURL" -ForegroundColor Red
+    Write-Host "Ensure the Ollama server is running and accessible." -ForegroundColor Red
+    Write-Host "Usage: .\Ollm_Bridge_Remote_v1.0.ps1 -OllamaServerURL http://your-server:11434" -ForegroundColor Yellow
     exit 1
 }
 
-# Ensure public models directory exists
 if (-not (Test-Path $PublicModelsDir)) {
-    Write-Info "Creating Public Models Directory..."
+    Write-Host "Creating Public Models Directory..." -ForegroundColor Cyan
     New-Item -Type Directory -Path $PublicModelsDir | Out-Null
-    Write-Success "✓ Public Models Directory created"
+    Write-Host "Public Models Directory created" -ForegroundColor Green
 }
 else {
-    Write-Success "✓ Public Models Directory confirmed"
+    Write-Host "Public Models Directory confirmed" -ForegroundColor Green
 }
 
-# Reset lmstudio directory if it exists
 if (Test-Path "$PublicModelsDir\lmstudio") {
-    Write-Info "Resetting LM Studio directory..."
+    Write-Host "Resetting LM Studio directory..." -ForegroundColor Cyan
     Remove-Item -Path "$PublicModelsDir\lmstudio" -Recurse -Force
-    Write-Success "✓ LM Studio Directory Reset"
+    Write-Host "LM Studio Directory Reset" -ForegroundColor Green
 }
 
-# Create lmstudio directory
-Write-Info "Creating lmstudio directory structure..."
+Write-Host "Creating lmstudio directory structure..." -ForegroundColor Cyan
 New-Item -Type Directory -Path "$PublicModelsDir\lmstudio" | Out-Null
-Write-Success "✓ LM Studio Directory Created"
+Write-Host "LM Studio Directory Created" -ForegroundColor Green
 
 Write-Host ""
-Write-Info "Fetching available models from remote server..."
+Write-Host "Fetching available models from remote server..." -ForegroundColor Cyan
 Write-Host ""
 
-# Get list of available models from remote server
 $models = $response.models
 $totalModels = $models.Count
 
 if ($totalModels -eq 0) {
-    Write-Warning-Custom "No models found on remote Ollama server"
+    Write-Host "No models found on remote Ollama server" -ForegroundColor Yellow
     exit 0
 }
 
-Write-Success "✓ Found $totalModels model(s) on remote server"
+Write-Host "Found $totalModels model(s) on remote server" -ForegroundColor Green
 Write-Host ""
 
-# Process each model
 $modelCount = 0
 foreach ($model in $models) {
-    $modelCount++
+    $modelCount = $modelCount + 1
     $modelName = $model.name
     $modelSize = $model.size
     $modelDigest = $model.digest
     
-    # Extract model info from name (format: name:tag)
     $nameParts = $modelName -split ":"
     $baseName = $nameParts[0]
-    $tag = if ($nameParts.Count -gt 1) { $nameParts[1] } else { "latest" }
+    if ($nameParts.Count -gt 1) {
+        $tag = $nameParts[1]
+    }
+    else {
+        $tag = "latest"
+    }
     
-    # Format size in human-readable format
     $sizeMB = [math]::Round($modelSize / 1MB, 2)
     $sizeGB = [math]::Round($modelSize / 1GB, 2)
-    $displaySize = if ($sizeGB -ge 1) { "$sizeGB GB" } else { "$sizeMB MB" }
+    if ($sizeGB -ge 1) {
+        $displaySize = "$sizeGB GB"
+    }
+    else {
+        $displaySize = "$sizeMB MB"
+    }
     
     Write-Host "[$modelCount/$totalModels] Processing: $modelName ($displaySize)" -ForegroundColor Magenta
     
-    # Create model directory
     $modelDir = "$PublicModelsDir\lmstudio\$baseName"
     if (-not (Test-Path $modelDir)) {
         New-Item -Type Directory -Path $modelDir | Out-Null
     }
     
-    # Create a model metadata file for LM Studio
     $metadataPath = "$modelDir\model.json"
     $metadata = @{
         name = $modelName
@@ -116,16 +104,15 @@ foreach ($model in $models) {
     } | ConvertTo-Json
     
     Set-Content -Path $metadataPath -Value $metadata -Encoding UTF8
-    Write-Success "  ✓ Created metadata for $modelName"
+    Write-Host "  Created metadata for $modelName" -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Success "✓ Ollm Bridge Remote Setup Complete!"
+Write-Host "Ollm Bridge Remote Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Generate configuration file for LM Studio integration
 $configPath = "$PublicModelsDir\lmstudio\ollm_remote_config.json"
 $config = @{
     ollamaServer = $OllamaServerURL
@@ -136,38 +123,29 @@ $config = @{
         "",
         "Option 1: Connect Directly to Remote Ollama Server",
         "1. Open LM Studio",
-        "2. Go to Settings → Local Server",
-        "3. Under 'Connect to a Remote Server', enter: $OllamaServerURL",
-        "4. Click 'Connect'",
+        "2. Go to Settings - Local Server",
+        "3. Under Connect to a Remote Server, enter: $OllamaServerURL",
+        "4. Click Connect",
         "",
-        "Option 2: Proxy Through Local Ollama (if available)",
+        "Option 2: Proxy Through Local Ollama",
         "1. Install Ollama on your Windows machine",
         "2. Start local Ollama: ollama serve",
         "3. Pull models from remote server into local Ollama",
-        "4. Use LM Studio normally with local Ollama",
-        "",
-        "Option 3: Use Model Metadata Files",
-        "Each model folder contains a model.json file with metadata.",
-        "You can reference these for manual model configuration.",
-        ""
+        "4. Use LM Studio normally with local Ollama"
     )
 } | ConvertTo-Json -Depth 10
 
 Set-Content -Path $configPath -Value $config -Encoding UTF8
 
-Write-Info "Configuration saved to: $configPath"
+Write-Host "Configuration saved to: $configPath" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "1. Verify the Ollama server is accessible at: $OllamaServerURL" -ForegroundColor Yellow
-Write-Host "2. Open LM Studio and configure it to connect to your remote Ollama server" -ForegroundColor Yellow
-Write-Host "3. Go to Settings → Local Server → Connect to Remote Server" -ForegroundColor Yellow
-Write-Host "4. Enter the server URL: $OllamaServerURL" -ForegroundColor Yellow
-Write-Host "5. You should now see all remote models available in LM Studio" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "Troubleshooting:" -ForegroundColor Cyan
-Write-Host "- If connection fails, check that your Linux server firewall allows port 11434" -ForegroundColor Cyan
-Write-Host "- Ensure Ollama is running on the Linux server: 'ollama serve'" -ForegroundColor Cyan
-Write-Host "- For network access, start Ollama with: 'OLLAMA_HOST=0.0.0.0:11434 ollama serve'" -ForegroundColor Cyan
+Write-Host "NEXT STEPS:" -ForegroundColor Yellow
+Write-Host "1. Verify Ollama server is accessible at: $OllamaServerURL" -ForegroundColor Yellow
+Write-Host "2. Open LM Studio" -ForegroundColor Yellow
+Write-Host "3. Go to Settings - Local Server" -ForegroundColor Yellow
+Write-Host "4. Select 'Connect to a Remote Server'" -ForegroundColor Yellow
+Write-Host "5. Enter server URL: $OllamaServerURL" -ForegroundColor Yellow
+Write-Host "6. Click Connect" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Models location: $PublicModelsDir\lmstudio" -ForegroundColor Green
 Write-Host ""
